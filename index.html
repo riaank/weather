@@ -3,15 +3,22 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#EDF0EC" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#131A1C" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Weather">
 <title>Stellenbosch forecast consensus</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌦️</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
+/* ───── Tokens ───── */
 :root {
   --paper: #EDF0EC; --panel: #F6F7F4; --ink: #1E2A2E; --muted: #5C6866; --rule: #C9D1CC;
   --rain: #2D5FA0; --temp: #A86B12; --wind: #2B7563; --warn: #A3432A; --dry: #DDE3DE;
+  --pad: 14px;
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -24,207 +31,233 @@
   --paper: #131A1C; --panel: #1A2326; --ink: #E3EAE6; --muted: #93A19D; --rule: #2E3B3E;
   --rain: #6E9FDB; --temp: #E2A94E; --wind: #5DBBA2; --warn: #E0805F; --dry: #243134;
 }
+
+/* ───── Base (phone first) ───── */
 * { box-sizing: border-box; }
 :root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
-html { scroll-padding-top: env(safe-area-inset-top, 0px); background: var(--paper); }
+html { scroll-padding-top: calc(env(safe-area-inset-top, 0px) + 72px); background: var(--paper); -webkit-text-size-adjust: 100%; }
 body {
   margin: 0; background: var(--paper); color: var(--ink);
   font: 16px/1.5 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  padding: 24px 20px 48px;
+  padding: 0 var(--pad) 40px;
 }
 main { max-width: 1180px; margin: 0 auto; }
 h1, h2, h3, .headline, .fig { font-family: 'Barlow Semi Condensed', 'Arial Narrow', system-ui, sans-serif; }
-h1 { font-size: 1.3rem; font-weight: 600; margin: 0; }
-h2 { font-size: 1.4rem; font-weight: 600; margin: 0 0 .6rem; }
+h2 { font-size: 1.35rem; font-weight: 600; margin: 0; }
 p { margin: 0; }
 .muted { color: var(--muted); }
 :focus-visible { outline: 2px solid var(--rain); outline-offset: 2px; }
+button, select, input { font: inherit; color: var(--ink); }
 
-/* Top bar */
-.top { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;
-  padding-bottom: 1rem; border-bottom: 1px solid var(--rule); }
-.top .sub { color: var(--muted); font-size: .88rem; }
-.controls { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; }
-.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
-.seg button { border: 0; background: transparent; color: var(--muted); padding: .4rem .8rem; cursor: pointer;
-  font: 700 .85rem 'Atkinson Hyperlegible', system-ui, sans-serif; }
+/* Sticky bar: place, time span, refresh */
+.top {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10;
+  display: flex; align-items: center; gap: .5rem;
+  margin: 0 calc(-1 * var(--pad)); padding: 8px var(--pad);
+  background: var(--paper); border-bottom: 1px solid var(--rule);
+  box-shadow: 0 calc(-1 * env(safe-area-inset-top, 0px)) 0 var(--paper);
+}
+.top h1 { flex: 1; min-width: 0; margin: 0; font-size: 1.2rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; flex: none; }
+.seg button { border: 0; background: transparent; color: var(--muted); min-height: 40px; padding: 0 .65rem; cursor: pointer; font-weight: 700; font-size: .85rem; white-space: nowrap; }
+.seg button + button { border-left: 1px solid var(--rule); }
 .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
-label.inline { display: inline-flex; gap: .4rem; align-items: center; font-size: .85rem; color: var(--muted); }
-select, input[type=number] { font: inherit; font-size: .85rem; color: var(--ink); background: var(--panel);
-  border: 1px solid var(--rule); border-radius: 6px; padding: .35rem .5rem; }
-.btn { border: 1px solid var(--ink); background: transparent; color: var(--ink); padding: .42rem .9rem; border-radius: 6px;
-  cursor: pointer; font: 700 .85rem 'Atkinson Hyperlegible', system-ui, sans-serif; }
-.btn:hover:not(:disabled) { background: var(--ink); color: var(--paper); }
-.btn:disabled { opacity: .5; cursor: progress; }
+.iconbtn { flex: none; width: 44px; height: 40px; display: grid; place-items: center; border: 1px solid var(--rule); border-radius: 8px; background: transparent; cursor: pointer; color: var(--ink); }
+.iconbtn svg { width: 20px; height: 20px; }
+.iconbtn:disabled { opacity: .55; cursor: progress; }
+.iconbtn:disabled svg { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* Hero */
-.hero { padding: 2.2rem 0 .5rem; }
-.headline { font-weight: 700; font-size: clamp(2.1rem, 5.6vw, 4.1rem); line-height: 1.02; letter-spacing: -.01em;
-  max-width: 20ch; color: var(--ink); }
-.support { margin-top: .8rem; max-width: 68ch; font-size: 1.05rem; color: var(--muted); }
-.facts { list-style: none; padding: 0; margin: 1.4rem 0 0; display: flex; gap: 2.2rem; flex-wrap: wrap; }
-.facts li { font-size: .88rem; color: var(--muted); max-width: 26ch; }
-.facts .fig { display: block; font-size: 1.35rem; font-weight: 600; color: var(--ink); line-height: 1.2; }
+.hero { padding-top: 1.1rem; }
+.status { font-size: .82rem; color: var(--muted); }
+.headline { margin-top: .6rem; font-weight: 700; font-size: clamp(2rem, 8.5vw, 4.1rem); line-height: 1.02; letter-spacing: -.01em; max-width: 20ch; }
+.support { margin-top: .7rem; max-width: 68ch; font-size: 1rem; color: var(--muted); }
+.facts { list-style: none; padding: 0; margin: 1.2rem 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: .9rem 1.5rem; }
+.facts li { font-size: .85rem; color: var(--muted); }
+.facts .fig { display: block; font-size: 1.3rem; font-weight: 600; color: var(--ink); line-height: 1.2; }
 
-/* Ribbon */
-.ribbon-wrap { margin-top: 2rem; }
-.ribbon-scroll { overflow-x: auto; padding-bottom: 4px; }
-.ribbon { display: grid; grid-template-columns: minmax(8rem, 10.5rem) minmax(560px, 1fr); column-gap: .75rem; row-gap: 3px; align-items: center; }
-.rlabel { font-size: .8rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rlabel.strong { color: var(--ink); font-weight: 700; font-size: .88rem; }
+/* Section headings with an optional control */
+section.block { margin-top: 2.2rem; }
+.head { display: flex; justify-content: space-between; align-items: center; gap: .5rem 1rem; flex-wrap: wrap; margin-bottom: .5rem; }
+.note { color: var(--muted); font-size: .88rem; max-width: 72ch; margin-bottom: .8rem; }
+label.inline { display: inline-flex; gap: .45rem; align-items: center; font-size: .85rem; color: var(--muted); min-height: 44px; cursor: pointer; }
+select { background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; min-height: 40px; padding: 0 .5rem; font-size: .88rem; }
+input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--ink); }
+
+/* Ribbon: fits the screen width, no sideways scrolling */
+.ribbon { display: grid; grid-template-columns: 5rem minmax(0, 1fr); column-gap: .5rem; row-gap: 3px; align-items: center; }
+.rlabel { font-size: .75rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rlabel.strong { color: var(--ink); font-weight: 700; font-size: .8rem; }
 .rrow, .rticks { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); }
-.rrow { height: 16px; }
+.rrow { height: 14px; }
 .rrow.gap { column-gap: 1px; }
-.rrow.strong { height: 30px; }
+.rrow.strong { height: 28px; }
 .cell { background: var(--dry); }
 .cell.miss { background: repeating-linear-gradient(135deg, transparent 0 3px, var(--dry) 3px 5px); }
 .cell.mid { box-shadow: inset 2px 0 0 var(--muted); }
-.rgroup { grid-column: 1 / -1; font-size: .74rem; color: var(--muted); padding-top: .55rem; }
-.rticks { font-size: .72rem; color: var(--muted); height: 1.2rem; }
+.rgroup { grid-column: 1 / -1; font-size: .72rem; color: var(--muted); padding-top: .5rem; }
+.rticks { font-size: .7rem; color: var(--muted); height: 1.15rem; }
 .rticks span { white-space: nowrap; overflow: visible; }
-.legend-line { margin-top: .6rem; font-size: .82rem; color: var(--muted); max-width: 80ch; }
-.sw { display: inline-block; width: 22px; height: 10px; vertical-align: middle; margin: 0 .25rem 0 .1rem; }
+.legend-line { margin-top: .6rem; font-size: .8rem; color: var(--muted); max-width: 80ch; }
+.sw { display: inline-block; width: 18px; height: 9px; vertical-align: middle; margin: 0 .2rem 0 .1rem; }
 
-/* Sections */
-section.block { margin-top: 2.6rem; }
-.note { color: var(--muted); font-size: .9rem; max-width: 72ch; margin: -.2rem 0 .8rem; }
-
-/* Days */
-.days-scroll { overflow-x: auto; }
-.days { display: grid; grid-template-columns: repeat(var(--d, 7), minmax(132px, 1fr));
-  border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
-.day { padding: .9rem .8rem 1rem; border-left: 1px solid var(--rule); }
-.day:first-child { border-left: 0; }
-.day h3 { font-size: 1.1rem; font-weight: 600; margin: 0 0 .3rem; }
-.day .t { font-family: 'Barlow Semi Condensed', system-ui, sans-serif; font-size: 1.7rem; font-weight: 600; color: var(--temp); line-height: 1.1; }
+/* Days: a list on phones, columns on wide screens */
+.days { border-top: 1px solid var(--rule); }
+.day { display: grid; grid-template-columns: 1fr auto; column-gap: 1rem; padding: .75rem 0; border-bottom: 1px solid var(--rule); }
+.day h3 { grid-column: 1; grid-row: 1; margin: 0; font-size: 1.15rem; font-weight: 600; }
+.day .t { grid-column: 2; grid-row: 1 / span 2; text-align: right; font-family: 'Barlow Semi Condensed', system-ui, sans-serif; font-size: 1.7rem; font-weight: 600; color: var(--temp); line-height: 1.1; }
 .day .t small { font-size: 1.05rem; color: var(--muted); font-weight: 500; }
-.day .row { font-size: .84rem; margin-top: .45rem; display: flex; gap: .35rem; align-items: center; flex-wrap: wrap; }
+.day .conf { grid-column: 1; grid-row: 2; font-size: .78rem; color: var(--muted); }
+.day .row { grid-column: 1 / -1; font-size: .88rem; margin-top: .35rem; display: flex; gap: .35rem; align-items: center; flex-wrap: wrap; }
 .day .rainline { color: var(--rain); font-weight: 700; }
 .day .dry { color: var(--muted); }
-.arrow { width: 14px; height: 14px; flex: none; color: var(--wind); }
-.tag { font-size: .72rem; font-weight: 700; color: var(--warn); border: 1px solid currentColor; border-radius: 4px; padding: 0 .3rem; }
-.day .conf { font-size: .78rem; color: var(--muted); margin-top: .55rem; }
 .conf b { color: var(--ink); }
+.arrow { width: 15px; height: 15px; flex: none; color: var(--wind); }
+.tag { font-size: .72rem; font-weight: 700; color: var(--warn); border: 1px solid currentColor; border-radius: 4px; padding: 0 .3rem; }
+.partial { font-family: 'Atkinson Hyperlegible', system-ui, sans-serif; font-size: .75rem; color: var(--muted); font-weight: 400; }
 
 /* Charts */
-.chart { position: relative; height: 270px; }
-.chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
+.chart { position: relative; height: 220px; }
+.chart-msg { color: var(--muted); font-size: .88rem; }
 
-/* Tables */
-.tablewrap { overflow-x: auto; }
-table { border-collapse: collapse; width: 100%; font-size: .9rem; }
-th, td { text-align: left; padding: .55rem .6rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
-th { font-weight: 700; color: var(--muted); font-size: .8rem; }
-td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
-td .detail { display: block; color: var(--muted); font-size: .8rem; margin-top: .15rem; }
+/* Rain spells */
+.spells { margin-top: 1.1rem; border-top: 1px solid var(--rule); }
+.spell { padding: .75rem 0; border-bottom: 1px solid var(--rule); }
+.spell h3 { margin: 0; font-size: 1.1rem; font-weight: 600; }
+.spell .stats { display: flex; flex-wrap: wrap; gap: .2rem 1.2rem; margin-top: .2rem; font-size: .85rem; color: var(--muted); }
+.spell .stats b { color: var(--ink); font-family: 'Barlow Semi Condensed', system-ui, sans-serif; font-size: 1.1rem; font-weight: 600; margin-right: .2rem; }
+.spell .onset { margin-top: .35rem; font-size: .88rem; }
+.spell .detail { display: block; color: var(--muted); font-size: .8rem; margin-top: .1rem; }
+.empty { padding: .75rem 0; color: var(--muted); font-size: .9rem; }
+
+/* Sources */
+.srcs { border-top: 1px solid var(--rule); }
+.src { display: grid; grid-template-columns: 1fr auto; column-gap: .75rem; align-items: center; padding: .65rem 0; border-bottom: 1px solid var(--rule); }
+.src .name { font-size: .95rem; }
+.src .name span { display: block; font-size: .78rem; color: var(--muted); }
+.src .w { grid-column: 2; grid-row: 1 / span 2; text-align: right; font-size: .8rem; color: var(--muted); }
+.src .status { grid-column: 1; font-size: .8rem; color: var(--muted); }
+.src input[type=number] { width: 4.8rem; min-height: 44px; text-align: center; background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; font-size: 1rem; }
 .ok { color: var(--wind); font-weight: 700; }
 .err { color: var(--warn); font-weight: 700; }
 .off { color: var(--muted); font-weight: 700; }
-input[type=number] { width: 4.6rem; }
+.btn { border: 1px solid var(--ink); background: transparent; color: var(--ink); min-height: 44px; padding: 0 1rem; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: .88rem; margin-top: .9rem; }
 details { margin-top: 1.2rem; max-width: 80ch; }
-summary { cursor: pointer; font-weight: 700; }
+summary { cursor: pointer; font-weight: 700; min-height: 44px; display: flex; align-items: center; }
 details p { margin-top: .6rem; font-size: .9rem; color: var(--muted); }
 details p b { color: var(--ink); }
-footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--rule); font-size: .78rem; color: var(--muted); }
+footer { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--rule); font-size: .78rem; color: var(--muted); }
 footer a { color: inherit; }
 
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
-@media (max-width: 640px) {
-  body { padding: 16px 14px 40px; }
-  .facts { gap: 1.2rem; }
-  .ribbon { grid-template-columns: 6.5rem minmax(560px, 1fr); }
+/* ───── Larger phones and small tablets ───── */
+@media (min-width: 560px) {
+  .ribbon { grid-template-columns: 9rem minmax(0, 1fr); column-gap: .75rem; }
+  .rlabel { font-size: .8rem; }
+  .rrow { height: 16px; }
+  .rrow.strong { height: 30px; }
 }
+/* ───── Tablets and desktop ───── */
+@media (min-width: 720px) {
+  :root { --pad: 24px; }
+  .top { padding-top: 12px; padding-bottom: 12px; }
+  .top h1 { font-size: 1.35rem; }
+  .seg button { padding: 0 .9rem; }
+  .hero { padding-top: 1.8rem; }
+  .support { font-size: 1.05rem; }
+  section.block { margin-top: 2.8rem; }
+  .chart { height: 280px; }
+  .srcs { display: grid; grid-template-columns: 1fr 1fr; column-gap: 2.5rem; }
+}
+@media (min-width: 960px) {
+  .days { display: grid; grid-template-columns: repeat(var(--d, 7), minmax(0, 1fr)); border-bottom: 1px solid var(--rule); }
+  .day { display: flex; flex-direction: column; gap: .35rem; padding: .9rem .8rem 1rem; border-bottom: 0; border-left: 1px solid var(--rule); }
+  .day:first-child { border-left: 0; }
+  .day .t { text-align: left; }
+  .day .row { margin-top: 0; font-size: .84rem; }
+  .day .conf { order: 5; margin-top: .3rem; }
+  .spells { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); column-gap: 2rem; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
+<header class="top">
+  <h1 id="place">Stellenbosch</h1>
+  <div class="seg" role="group" aria-label="Time span">
+    <button type="button" data-span="24" aria-pressed="false">24 h</button>
+    <button type="button" data-span="48" aria-pressed="true">48 h</button>
+    <button type="button" data-span="168" aria-pressed="false">7 days</button>
+  </div>
+  <button class="iconbtn" id="refresh" type="button" aria-label="Refresh forecasts" title="Refresh forecasts">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+  </button>
+</header>
+
 <main>
-  <header class="top">
-    <div>
-      <h1 id="place">Stellenbosch</h1>
-      <p class="sub" id="status">Fetching forecasts…</p>
-    </div>
-    <div class="controls">
-      <div class="seg" role="group" aria-label="Time span">
-        <button type="button" data-span="48" aria-pressed="true">Next 48 hours</button>
-        <button type="button" data-span="168" aria-pressed="false">7 days</button>
-      </div>
-      <label class="inline">Count an hour as wet from
-        <select id="thr">
+  <section class="hero" aria-live="polite">
+    <p class="status" id="status">Fetching forecasts…</p>
+    <p class="headline" id="headline">Fetching forecasts…</p>
+    <p class="support" id="support"></p>
+    <ul class="facts" id="facts"></ul>
+  </section>
+
+  <section class="block" id="timing">
+    <div class="head">
+      <h2>When the models expect rain</h2>
+      <label class="inline">Wet from
+        <select id="thr" aria-label="Rain needed to count an hour as wet">
           <option value="0.1">0.1 mm (drizzle)</option>
-          <option value="0.2" selected>0.2 mm (light rain)</option>
-          <option value="0.5">0.5 mm (steady rain)</option>
+          <option value="0.2" selected>0.2 mm (light)</option>
+          <option value="0.5">0.5 mm (steady)</option>
           <option value="1">1 mm (moderate)</option>
           <option value="2.5">2.5 mm (heavy)</option>
         </select>
       </label>
-      <button class="btn" id="refresh" type="button">Refresh forecasts</button>
     </div>
-  </header>
+    <div class="ribbon" id="ribbon" aria-label="Rain agreement between forecast sources over time"></div>
+    <p class="legend-line" id="ribbon-legend"></p>
+  </section>
 
-  <section class="hero" aria-live="polite">
-    <p class="headline" id="headline">Fetching forecasts…</p>
-    <p class="support" id="support"></p>
-    <ul class="facts" id="facts"></ul>
+  <section class="block">
+    <h2 style="margin-bottom:.5rem">Day by day</h2>
+    <div class="days" id="days"></div>
+  </section>
 
-    <div class="ribbon-wrap">
-      <h2>When the models expect rain</h2>
-      <div class="ribbon-scroll"><div class="ribbon" id="ribbon" aria-label="Hour-by-hour rain agreement between forecast models"></div></div>
-      <p class="legend-line">
-        Each column is one hour, starting now; vertical lines mark midnight.
-        <span class="sw" style="background:color-mix(in srgb, var(--rain) 90%, var(--dry))"></span>more sources agree on rain,
-        <span class="sw" style="background:var(--dry)"></span>dry,
-        <span class="sw" style="background:repeating-linear-gradient(135deg, transparent 0 3px, var(--dry) 3px 5px)"></span>no data for that hour.
-      </p>
+  <section class="block">
+    <h2 style="margin-bottom:.3rem">Rain</h2>
+    <p class="note">Bars show the chance of rain each hour. The line shows how hard it rains in the sources that have rain, not an average that includes dry ones.</p>
+    <div class="chart"><canvas id="cRain" role="img" aria-label="Chance of rain chart"></canvas></div>
+    <div class="spells" id="events"></div>
+  </section>
+
+  <section class="block">
+    <h2 style="margin-bottom:.3rem">Wind</h2>
+    <p class="note">Arrows point where the wind is blowing to. The band is the spread between models; the dashed line is gusts.</p>
+    <div class="chart"><canvas id="cWind" role="img" aria-label="Wind chart"></canvas></div>
+  </section>
+
+  <section class="block">
+    <div class="head">
+      <h2>Temperature</h2>
+      <label class="inline"><input type="checkbox" id="showModels"> Show each model</label>
     </div>
+    <p class="note">The line is the consensus; the band runs from the coolest to the warmest model.</p>
+    <div class="chart"><canvas id="cTemp" role="img" aria-label="Temperature chart"></canvas></div>
   </section>
 
   <section class="block">
-    <h2>Day by day</h2>
-    <p class="note">Agreement combines how closely the models match on temperature, how decisive the rain signal is, and whether wind directions line up.</p>
-    <div class="days-scroll"><div class="days" id="days"></div></div>
-  </section>
-
-  <section class="block">
-    <div class="chart-head"><h2>Temperature</h2>
-      <label class="inline"><input type="checkbox" id="showModels"> Show each model</label></div>
-    <p class="note">The line is the consensus; the band is the spread between the warmest and coolest model.</p>
-    <div class="chart"><canvas id="cTemp" aria-label="Temperature chart" role="img"></canvas></div>
-  </section>
-
-  <section class="block">
-    <h2>Rain</h2>
-    <p class="note">Bars show the chance of rain in each hour. The line shows how hard it rains in the models that have rain, not an average that includes dry ones.</p>
-    <div class="chart"><canvas id="cRain" aria-label="Rain chance chart" role="img"></canvas></div>
-    <div class="tablewrap" style="margin-top:1.2rem">
-      <table>
-        <thead><tr><th>Rain spell</th><th>Peak chance</th><th>Amount</th><th>Sources with rain</th><th>When each source starts it</th></tr></thead>
-        <tbody id="events"></tbody>
-      </table>
-    </div>
-  </section>
-
-  <section class="block">
-    <h2>Wind</h2>
-    <p class="note">Arrows point where the wind is blowing to. The band is the spread of wind speed between models; the dashed line is gusts.</p>
-    <div class="chart"><canvas id="cWind" aria-label="Wind chart" role="img"></canvas></div>
-  </section>
-
-  <section class="block">
-    <h2>Sources and weights</h2>
-    <p class="note">Set a weight to 0 to leave a source out. Weights are saved in this browser.</p>
-    <div class="tablewrap">
-      <table>
-        <thead><tr><th>Source</th><th>Kind</th><th>Status</th><th>Weight</th></tr></thead>
-        <tbody id="sources"></tbody>
-      </table>
-    </div>
-    <p style="margin-top:.8rem"><button class="btn" id="resetWeights" type="button">Reset weights</button></p>
+    <h2 style="margin-bottom:.3rem">Sources and weights</h2>
+    <p class="note" id="srcnote">Set a weight to 0 to leave a source out. Weights are saved on this device.</p>
+    <div class="srcs" id="sources"></div>
+    <button class="btn" id="resetWeights" type="button">Reset weights</button>
     <details>
       <summary>How the consensus is worked out</summary>
-      <p><b>Temperature and wind speed.</b> A weighted mean of every source that has a value for that hour. When five or more report, the single highest and lowest values are dropped first, so one outlier model can't drag the result.</p>
-      <p><b>Wind direction.</b> Averaged as vectors rather than degrees, so 350° and 10° average to north, not south. When models point different ways, the day's agreement score drops.</p>
-      <p><b>Chance of rain.</b> Four equal votes: the weighted share of single models showing rain that hour, and the share of members showing rain in each of the ECMWF, GFS and ICON ensembles. Rain amounts are the median of the sources that have rain, because averaging wet and dry models smears a short shower into all-day drizzle.</p>
-      <p><b>Timing.</b> Every hour is labelled by when it starts, so a 14:00 column means rain between 14:00 and 15:00. Sources that only give rain in 3- or 6-hour blocks are left out of rain timing but still count for temperature and wind.</p>
+      <p><b>Temperature and wind speed.</b> A weighted mean of every source with a value for that hour. When five or more report, the single highest and lowest values are dropped first, so one outlier model can't drag the result.</p>
+      <p><b>Wind direction.</b> Averaged as vectors rather than degrees, so 350° and 10° average to north, not south. When models point different ways, the day's agreement drops.</p>
+      <p><b>Chance of rain.</b> Four equal votes: the weighted share of single models showing rain that hour, and the share of runs showing rain in each of the ECMWF, GFS and ICON ensembles. Rain amounts are the median of the sources that have rain, because averaging wet and dry models smears a short shower into all-day drizzle.</p>
+      <p><b>Timing.</b> Each hour is labelled by when it starts, so 14:00 means rain between 14:00 and 15:00. On narrow screens the 7-day view groups hours into 3-hour blocks and shows the highest chance in each block. Sources that only give rain in 3- or 6-hour blocks are left out of rain timing but still count for temperature and wind.</p>
+      <p><b>Agreement.</b> Combines how closely models match on temperature, how decisive the rain signal is, and whether wind directions line up.</p>
       <p><b>Weights.</b> Start equal, except Yr.no and AccuWeather at 0.5, because both lean heavily on ECMWF and would otherwise count it twice. These are judgement calls, not measured skill: nothing here checks forecasts against what actually happened yet.</p>
     </details>
   </section>
@@ -249,42 +282,43 @@ const HOURS = 168;
 const H = 3600e3;
 const LIKELY = 0.5;      // a "rain spell" is any run of hours at or above this chance
 const POSSIBLE = 0.3;
+const SPANS = [24, 48, 168];
 
 // Optional: AccuWeather's free tier gives a 12-hour hourly forecast.
-// Add your API key and the location key for Stellenbosch to include it.
-// If the browser blocks the request (CORS), point baseUrl at a small proxy.
+// Don't put a key here if this file lives in a public repository; use a proxy that holds it.
 const ACCUWEATHER = { apiKey: '', locationKey: '', baseUrl: 'https://dataservice.accuweather.com' };
 
 // Deterministic sources. `ids` are tried in order until one answers.
 const SOURCE_DEFS = [
-  { key: 'ecmwf',     label: 'ECMWF IFS',  org: 'ECMWF',                     kind: 'Physics model', ids: ['ecmwf_ifs', 'ecmwf_ifs025'], weight: 1 },
-  { key: 'gfs',       label: 'GFS',        org: 'NOAA',                      kind: 'Physics model', ids: ['gfs_seamless'], weight: 1 },
-  { key: 'icon',      label: 'ICON',       org: 'DWD Germany',               kind: 'Physics model', ids: ['icon_seamless'], weight: 1 },
-  { key: 'ukmo',      label: 'UKMO',       org: 'Met Office',                kind: 'Physics model', ids: ['ukmo_seamless'], weight: 1 },
-  { key: 'arpege',    label: 'ARPEGE',     org: 'Météo-France',              kind: 'Physics model', ids: ['meteofrance_seamless'], weight: 1 },
-  { key: 'gem',       label: 'GEM',        org: 'Environment Canada',        kind: 'Physics model', ids: ['gem_seamless'], weight: 1 },
-  { key: 'aifs',      label: 'ECMWF AIFS', org: 'ECMWF',                     kind: 'AI model',      ids: ['ecmwf_aifs025_single', 'ecmwf_aifs025'], weight: 1 },
-  { key: 'graphcast', label: 'GraphCast',  org: 'Google DeepMind, GFS start', kind: 'AI model',     ids: ['gfs_graphcast025'], weight: 1 },
-  { key: 'yr',        label: 'Yr.no',      org: 'MET Norway',                kind: 'Forecast app',  fetcher: 'met',  weight: 0.5 },
-  { key: 'accu',      label: 'AccuWeather', org: 'AccuWeather',              kind: 'Forecast app',  fetcher: 'accu', weight: 0.5 },
+  { key: 'ecmwf',     label: 'ECMWF IFS',   short: 'ECMWF',     org: 'ECMWF',                      kind: 'Physics model', ids: ['ecmwf_ifs', 'ecmwf_ifs025'], weight: 1 },
+  { key: 'gfs',       label: 'GFS',         short: 'GFS',       org: 'NOAA',                       kind: 'Physics model', ids: ['gfs_seamless'], weight: 1 },
+  { key: 'icon',      label: 'ICON',        short: 'ICON',      org: 'DWD Germany',                kind: 'Physics model', ids: ['icon_seamless'], weight: 1 },
+  { key: 'ukmo',      label: 'UKMO',        short: 'UKMO',      org: 'Met Office',                 kind: 'Physics model', ids: ['ukmo_seamless'], weight: 1 },
+  { key: 'arpege',    label: 'ARPEGE',      short: 'ARPEGE',    org: 'Météo-France',               kind: 'Physics model', ids: ['meteofrance_seamless'], weight: 1 },
+  { key: 'gem',       label: 'GEM',         short: 'GEM',       org: 'Environment Canada',         kind: 'Physics model', ids: ['gem_seamless'], weight: 1 },
+  { key: 'aifs',      label: 'ECMWF AIFS',  short: 'AIFS',      org: 'ECMWF',                      kind: 'AI model',      ids: ['ecmwf_aifs025_single', 'ecmwf_aifs025'], weight: 1 },
+  { key: 'graphcast', label: 'GraphCast',   short: 'GraphCast', org: 'Google DeepMind, GFS start', kind: 'AI model',      ids: ['gfs_graphcast025'], weight: 1 },
+  { key: 'yr',        label: 'Yr.no',       short: 'Yr.no',     org: 'MET Norway',                 kind: 'Forecast app',  fetcher: 'met',  weight: 0.5 },
+  { key: 'accu',      label: 'AccuWeather', short: 'Accu',      org: 'AccuWeather',                kind: 'Forecast app',  fetcher: 'accu', weight: 0.5 },
 ];
 const ENSEMBLE_DEFS = [
-  { key: 'ecmwf_ens', label: 'ECMWF ensemble', ids: ['ecmwf_ifs025'] },
-  { key: 'gfs_ens',   label: 'GFS ensemble',   ids: ['gfs025', 'gfs_seamless'] },
-  { key: 'icon_ens',  label: 'ICON ensemble',  ids: ['icon_seamless', 'icon_global'] },
+  { key: 'ecmwf_ens', label: 'ECMWF ensemble', short: 'ECMWF ens', ids: ['ecmwf_ifs025'] },
+  { key: 'gfs_ens',   label: 'GFS ensemble',   short: 'GFS ens',   ids: ['gfs025', 'gfs_seamless'] },
+  { key: 'icon_ens',  label: 'ICON ensemble',  short: 'ICON ens',  ids: ['icon_seamless', 'icon_global'] },
 ];
 const WKEY = 'wx-consensus-weights-v1';
-const PKEY = 'wx-consensus-prefs-v1';
+const PKEY = 'wx-consensus-prefs-v2';
 
 /* ───────────── Helpers ───────────── */
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const COMPASS = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
 const compass = d => COMPASS[Math.round((((d % 360) + 360) % 360) / 22.5) % 16];
-const r0 = v => v == null ? '–' : Math.round(v);
+const r0 = v => (v == null ? '–' : Math.round(v));
+const mm = v => (v < 1 ? v.toFixed(1) : String(Math.round(v)));
 const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 function rgba(hex, a) {
-  const h = hex.replace('#', '');
+  const h = (hex || '#888888').replace('#', '');
   const f = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
   const n = parseInt(f, 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
@@ -304,6 +338,7 @@ function robust(pairs) {
 function median(a) { if (!a.length) return null; const s = a.slice().sort((x, y) => x - y); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
 function sd(a) { if (a.length < 2) return 0; const m = a.reduce((x, y) => x + y, 0) / a.length; return Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length); }
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const isNarrow = () => (window.innerWidth || document.documentElement.clientWidth || 1024) < 560;
 
 /* ───────────── State ───────────── */
 const state = { grid: [], meta: [], sources: [], ensembles: [], span: 48, thr: 0.2, showModels: false, B: null, charts: {}, fetchedAt: null };
@@ -422,7 +457,7 @@ async function fetchMet() {
 
 async function fetchAccu() {
   if (!ACCUWEATHER.apiKey || !ACCUWEATHER.locationKey)
-    throw new OffError('Off: add an API key and location key at the top of this file');
+    throw new OffError('Needs an API key and location key at the top of the file');
   const url = `${ACCUWEATHER.baseUrl}/forecasts/v1/hourly/12hour/${encodeURIComponent(ACCUWEATHER.locationKey)}` +
     `?apikey=${encodeURIComponent(ACCUWEATHER.apiKey)}&details=true&metric=true`;
   const arr = await getJSON(url);
@@ -569,12 +604,11 @@ function findEvents(B, act, thr) {
 function dayPhrase(i, long = true) {
   const M = state.meta;
   if (M[i].key === M[0].key) return 'today';
-  const tomorrowKey = fKey.format(M[0].t + 24 * H);
-  if (M[i].key === tomorrowKey) return 'tomorrow';
+  if (M[i].key === fKey.format(M[0].t + 24 * H)) return 'tomorrow';
   return long ? M[i].dayLong : M[i].day;
 }
 const at = i => (i >= HOURS ? 'after the forecast window' : `${dayPhrase(i, false)} ${state.meta[i].hm}`);
-const hmAt = (i, refDayKey) => (state.meta[i].key === refDayKey ? state.meta[i].hm : `${state.meta[i].day} ${state.meta[i].hm}`);
+const hmAt = (i, refKey) => (state.meta[i].key === refKey ? state.meta[i].hm : `${state.meta[i].day} ${state.meta[i].hm}`);
 
 function renderHeadline() {
   const B = state.B, M = state.meta, ev = B.events[0];
@@ -586,9 +620,9 @@ function renderHeadline() {
     let timing = '';
     if (k >= 2) {
       const a = ev.onsets[0].i, b = ev.onsets[k - 1].i;
-      timing = b - a <= 1 ? ` They agree on the start to within an hour.` : ` Their start times range from ${hmAt(a, M[ev.start].key)} to ${hmAt(b, M[ev.start].key)}.`;
+      timing = b - a <= 1 ? ' They agree on the start to within an hour.' : ` Their start times range from ${hmAt(a, M[ev.start].key)} to ${hmAt(b, M[ev.start].key)}.`;
     }
-    sup = `${k} of ${n} single models bring rain in this spell.${timing} Peak chance ${Math.round(ev.peak * 100)}%, about ${ev.total < 1 ? ev.total.toFixed(1) : Math.round(ev.total)} mm where it rains${ev.start === 0 ? '' : endTxt}.`;
+    sup = `${k} of ${n} single models bring rain in this spell.${timing} Peak chance ${Math.round(ev.peak * 100)}%, about ${mm(ev.total)} mm where it rains${ev.start === 0 ? '' : endTxt}.`;
   } else {
     let mi = -1, mp = -1; B.p.forEach((p, i) => { if (p != null && p > mp) { mp = p; mi = i; } });
     if (mi >= 0 && mp >= POSSIBLE) {
@@ -602,57 +636,78 @@ function renderHeadline() {
   $('#headline').textContent = head;
   $('#support').textContent = sup;
 
-  // Facts
-  const n24 = Math.min(24, HOURS);
-  const t24 = B.temp.slice(0, n24).filter(v => v != null);
+  const t24 = B.temp.slice(0, 24).filter(v => v != null);
   let wi = -1, wm = -1; B.wspd.forEach((v, i) => { if (v != null && v > wm) { wm = v; wi = i; } });
-  const okN = state.sources.filter(s => s.status === 'ok').length + state.ensembles.filter(e => e.status === 'ok').length;
-  const totN = state.sources.filter(s => s.status !== 'off').length + state.ensembles.length;
   const facts = [];
   if (t24.length) facts.push(`<li><span class="fig">${r0(Math.min(...t24))}° to ${r0(Math.max(...t24))}°</span>next 24 hours</li>`);
   if (wi >= 0) facts.push(`<li><span class="fig">${r0(wm)} km/h ${B.wdir[wi] != null ? compass(B.wdir[wi]) : ''}</span>strongest wind, ${esc(at(wi))}${B.gust[wi] != null ? `, gusting ${r0(B.gust[wi])}` : ''}</li>`);
-  facts.push(`<li><span class="fig">${okN} of ${totN}</span>sources answered</li>`);
   $('#facts').innerHTML = facts.join('');
 }
 
+/* The ribbon fits the screen: when hourly columns get too thin, hours are grouped into 3-hour blocks. */
 function renderRibbon() {
-  const span = state.span, B = state.B, M = state.meta.slice(0, span), thr = state.thr;
-  const gapCls = span <= 48 ? ' gap' : '';
-  const mid = i => (i > 0 && M[i].hour === 0 ? ' mid' : '');
-  const probCell = (p, i, what) => p == null
-    ? `<div class="cell miss${mid(i)}" title="${esc(`${M[i].dnum} ${M[i].hm}: ${what}, no data`)}"></div>`
-    : `<div class="cell${mid(i)}" style="background:color-mix(in srgb, var(--rain) ${Math.round(p * 100)}%, var(--dry))" title="${esc(`${M[i].dnum} ${M[i].hm}: ${what} ${Math.round(p * 100)}%`)}"></div>`;
-  let h = '';
+  const span = state.span, B = state.B, M = state.meta, thr = state.thr;
+  const el = $('#ribbon');
+  const narrow = isNarrow();
+  const W = el.clientWidth || document.documentElement.clientWidth || window.innerWidth || 360;
+  const labelW = narrow ? 88 : 156;
+  const avail = Math.max(160, W - labelW);
+  const block = avail / span < 3.5 ? 3 : 1;
+  const cols = Math.ceil(span / block);
+  const px = avail / cols, pxH = px / block;
+  const C = Array.from({ length: cols }, (_, c) => { const r = []; for (let i = c * block; i < Math.min(span, (c + 1) * block); i++) r.push(i); return r; });
+  const gapCls = px >= 5 ? ' gap' : '';
+  const mid = (idx, c) => (c > 0 && idx.some(i => M[i].hour === 0) ? ' mid' : '');
+  const when = idx => (idx.length > 1 ? `${M[idx[0]].dnum} ${M[idx[0]].hm}–${fHM.format(M[idx[idx.length - 1]].t + H)}` : `${M[idx[0]].dnum} ${M[idx[0]].hm}`);
+  const maxOf = (arr, idx) => { let m = null; for (const i of idx) { const v = arr[i]; if (v != null && (m == null || v > m)) m = v; } return m; };
+  const probCell = (arr, idx, c, what) => {
+    const p = maxOf(arr, idx);
+    const tip = esc(`${when(idx)}: ${what}${p == null ? ', no data' : ` ${Math.round(p * 100)}%`}`);
+    return p == null
+      ? `<div class="cell miss${mid(idx, c)}" title="${tip}"></div>`
+      : `<div class="cell${mid(idx, c)}" style="background:color-mix(in srgb, var(--rain) ${Math.round(p * 100)}%, var(--dry))" title="${tip}"></div>`;
+  };
+  const row = (label, cls, cells, full) => `<div class="rlabel${cls}" title="${esc(full || label)}">${esc(label)}</div><div class="rrow${cls}${gapCls}" style="--n:${cols}">${cells}</div>`;
 
-  // Tick labels
-  const labs = M.map(m => span <= 48 ? (m.hour === 0 ? m.day : (m.hour % 6 === 0 ? m.hm : '')) : (m.hour === 0 ? m.dnum : ''));
-  const room = span <= 48 ? 4 : 16;
-  if (!labs.slice(1, room + 1).some(Boolean)) labs[0] = span <= 48 ? M[0].hm : M[0].dnum;
-  h += `<div></div><div class="rticks" style="--n:${span}">${labs.map(l => `<span>${esc(l)}</span>`).join('')}</div>`;
+  // Tick labels: day names at midnight, clock times only when there is room.
+  const step = block === 1 ? [3, 6, 12].find(s => s * pxH >= 44) : null;
+  const dayLab = m => (pxH * 24 >= 70 ? m.dnum : m.day);
+  const labs = C.map((idx, c) => {
+    const mi = idx.find(i => M[i].hour === 0);
+    if (mi != null && (c > 0 || idx[0] === mi)) return dayLab(M[mi]);
+    if (step && M[idx[0]].hour % step === 0) return M[idx[0]].hm;
+    return '';
+  });
+  const room = Math.ceil(46 / px);
+  if (!labs.slice(1, room + 1).some(Boolean)) labs[0] = block === 1 ? M[0].hm : dayLab(M[0]);
+  let h = `<div></div><div class="rticks" style="--n:${cols}">${labs.map(l => `<span>${esc(l)}</span>`).join('')}</div>`;
 
-  h += `<div class="rlabel strong">Chance of rain</div><div class="rrow strong${gapCls}" style="--n:${span}">${M.map((m, i) => probCell(B.p[i], i, 'consensus')).join('')}</div>`;
+  h += row(narrow ? 'Chance' : 'Chance of rain', ' strong', C.map((idx, c) => probCell(B.p, idx, c, 'consensus')).join(''), 'Consensus chance of rain');
 
   const ens = state.ensembles.filter(e => e.status === 'ok');
   if (ens.length) {
     h += `<div class="rgroup">Ensembles: share of runs with rain</div>`;
-    ens.forEach((e, k) => {
-      h += `<div class="rlabel" title="${esc(e.def.label)}">${esc(e.def.label)} (${e.members.length})</div><div class="rrow${gapCls}" style="--n:${span}">${M.map((m, i) => probCell(B.pEns[k][i], i, e.def.label)).join('')}</div>`;
-    });
+    ens.forEach((e, k) => { h += row(narrow ? e.def.short : `${e.def.label} (${e.members.length})`, '', C.map((idx, c) => probCell(B.pEns[k], idx, c, e.def.label)).join(''), `${e.def.label}, ${e.members.length} runs`); });
   }
   const det = activeSources().filter(s => s.rainOK);
   if (det.length) {
     h += `<div class="rgroup">Single models: rain or dry</div>`;
     det.forEach(s => {
-      const cells = M.map((m, i) => {
-        const p = s.a.precip[i];
-        if (p == null) return `<div class="cell miss${mid(i)}" title="${esc(`${m.dnum} ${m.hm}: ${s.def.label}, no data`)}"></div>`;
-        const wet = p >= thr, pct = wet ? Math.round(clamp(55 + p * 15, 55, 100)) : 0;
-        return `<div class="cell${mid(i)}"${wet ? ` style="background:color-mix(in srgb, var(--rain) ${pct}%, var(--dry))"` : ''} title="${esc(`${m.dnum} ${m.hm}: ${s.def.label}, ${p.toFixed(1)} mm`)}"></div>`;
+      const cells = C.map((idx, c) => {
+        const p = maxOf(s.a.precip, idx);
+        if (p == null) return `<div class="cell miss${mid(idx, c)}" title="${esc(`${when(idx)}: ${s.def.label}, no data`)}"></div>`;
+        const wet = p >= thr, pct = Math.round(clamp(55 + p * 15, 55, 100));
+        return `<div class="cell${mid(idx, c)}"${wet ? ` style="background:color-mix(in srgb, var(--rain) ${pct}%, var(--dry))"` : ''} title="${esc(`${when(idx)}: ${s.def.label}, ${p.toFixed(1)} mm${block > 1 ? ' in the wettest hour' : ''}`)}"></div>`;
       }).join('');
-      h += `<div class="rlabel" title="${esc(s.def.label)}">${esc(s.def.label)}</div><div class="rrow${gapCls}" style="--n:${span}">${cells}</div>`;
+      h += row(narrow ? s.def.short : s.def.label, '', cells, s.def.label);
     });
   }
-  $('#ribbon').innerHTML = h;
+  el.innerHTML = h;
+  $('#ribbon-legend').innerHTML =
+    `Each column is ${block > 1 ? 'a 3-hour block' : 'one hour'}, starting now; lines mark midnight. ` +
+    `<span class="sw" style="background:color-mix(in srgb, var(--rain) 90%, var(--dry))"></span>more sources agree on rain, ` +
+    `<span class="sw" style="background:var(--dry)"></span>dry, ` +
+    `<span class="sw" style="background:repeating-linear-gradient(135deg, transparent 0 3px, var(--dry) 3px 5px)"></span>no data.`;
 }
 
 const arrowSVG = d => `<svg class="arrow" viewBox="0 0 16 16" aria-hidden="true" style="transform:rotate(${Math.round(d + 180)}deg)"><path d="M8 1 L13 14 L8 10.5 L3 14 Z" fill="currentColor"/></svg>`;
@@ -664,8 +719,8 @@ function renderDays() {
   const out = days.map((d, di) => {
     const I = d.idx;
     const temps = I.map(i => B.temp[i]).filter(v => v != null);
-    const partial = di === 0 && I.length < 24 ? `<span class="muted" style="font-size:.78rem"> from ${M[I[0]].hm}</span>` : '';
-    // Rain
+    const isToday = d.key === M[0].key;
+    const partial = isToday && I.length < 24 ? ` <span class="partial">from ${M[I[0]].hm}</span>` : '';
     let mp = -1, mi = -1; I.forEach(i => { if (B.p[i] != null && B.p[i] > mp) { mp = B.p[i]; mi = i; } });
     const likely = I.filter(i => B.p[i] != null && B.p[i] >= LIKELY);
     let rain;
@@ -675,12 +730,10 @@ function renderDays() {
       rain = `<div class="row rainline">Rain ${M[likely[0]].hm}–${endTxt}, up to ${Math.round(mp * 100)}%</div>`;
     } else if (mp >= POSSIBLE) rain = `<div class="row rainline">${Math.round(mp * 100)}% chance around ${M[mi].hm}</div>`;
     else rain = `<div class="row dry">Dry${mp >= 0 ? `, ${Math.round(mp * 100)}% at most` : ''}</div>`;
-    // Wind
     let wm = -1, wi = -1; I.forEach(i => { if (B.wspd[i] != null && B.wspd[i] > wm) { wm = B.wspd[i]; wi = i; } });
     const gmax = Math.max(...I.map(i => B.gust[i] ?? -1));
     const se = I.some(i => B.wdir[i] != null && B.wspd[i] != null && B.wdir[i] >= 100 && B.wdir[i] <= 170 && B.wspd[i] >= 30);
     const wind = wi >= 0 ? `<div class="row">${B.wdir[wi] != null ? arrowSVG(B.wdir[wi]) : ''}<span>${r0(wm)} km/h ${B.wdir[wi] != null ? compass(B.wdir[wi]) : ''}${gmax >= 0 ? `, gusts ${r0(gmax)}` : ''}</span>${se ? '<span class="tag">South-easter</span>' : ''}</div>` : '';
-    // Agreement
     const sds = I.map(i => B.tSd[i]).filter(v => v != null);
     const tScore = sds.length ? 1 - clamp((sds.reduce((a, b) => a + b, 0) / sds.length) / 3, 0, 1) : 0.5;
     const ps = I.map(i => B.p[i]).filter(v => v != null);
@@ -689,64 +742,61 @@ function renderDays() {
     const dScore = Rs.length ? Rs.reduce((a, b) => a + b, 0) / Rs.length : 1;
     const score = (tScore + rScore + dScore) / 3;
     const conf = score >= 0.78 ? 'High' : score >= 0.6 ? 'Medium' : 'Low';
-    return `<article class="day"><h3>${esc(di === 0 && d.key === M[0].key ? 'Today' : d.m.dnum)}${partial}</h3>
+    return `<article class="day"><h3>${esc(isToday ? 'Today' : d.m.dnum)}${partial}</h3>
       <div class="t">${temps.length ? r0(Math.max(...temps)) : '–'}°<small> / ${temps.length ? r0(Math.min(...temps)) : '–'}°</small></div>
-      ${rain}${wind}
-      <div class="conf">Agreement <b>${conf}</b></div></article>`;
+      <div class="conf">Agreement <b>${conf}</b></div>
+      ${rain}${wind}</article>`;
   });
   const el = $('#days'); el.style.setProperty('--d', Math.max(days.length, 1)); el.innerHTML = out.join('');
 }
 
 function renderEvents() {
-  const B = state.B, M = state.meta, tb = $('#events');
-  if (!B.events.length) {
-    tb.innerHTML = `<tr><td colspan="5" class="muted">No hour reaches a 50% chance of rain in the next 7 days.</td></tr>`;
-    return;
-  }
-  tb.innerHTML = B.events.map(e => {
-    const startKey = M[e.start].key;
-    const endI = e.end + 1;
-    const endTxt = endI < HOURS ? hmAt(endI, startKey) : 'beyond 7 days';
-    const onsetRange = e.onsets.length >= 2 ? `${hmAt(e.onsets[0].i, startKey)} to ${hmAt(e.onsets[e.onsets.length - 1].i, startKey)}` : (e.onsets[0] ? hmAt(e.onsets[0].i, startKey) : '–');
-    const detail = e.onsets.map(o => `${o.label} ${hmAt(o.i, startKey)}`).join(', ');
-    return `<tr><td class="num">${esc(M[e.start].dnum)} ${M[e.start].hm} to ${esc(endTxt)}<span class="detail">${e.end - e.start + 1} h</span></td>
-      <td class="num">${Math.round(e.peak * 100)}%</td>
-      <td class="num">${e.total < 1 ? e.total.toFixed(1) : Math.round(e.total)} mm</td>
-      <td class="num">${e.onsets.length} of ${e.withData}</td>
-      <td>${esc(onsetRange)}<span class="detail">${esc(detail)}</span></td></tr>`;
+  const B = state.B, M = state.meta, el = $('#events');
+  if (!B.events.length) { el.innerHTML = `<p class="empty">No hour reaches a 50% chance of rain in the next 7 days.</p>`; return; }
+  el.innerHTML = B.events.map(e => {
+    const k0 = M[e.start].key, endI = e.end + 1;
+    const endTxt = endI < HOURS ? hmAt(endI, k0) : 'beyond 7 days';
+    const n = e.onsets.length;
+    const range = n >= 2 ? `Models start it between ${hmAt(e.onsets[0].i, k0)} and ${hmAt(e.onsets[n - 1].i, k0)}` : (n ? `One model starts it at ${hmAt(e.onsets[0].i, k0)}` : 'No single model has rain here; the signal comes from the ensembles');
+    const detail = e.onsets.map(o => `${o.label} ${hmAt(o.i, k0)}`).join(', ');
+    return `<article class="spell">
+      <h3>${esc(M[e.start].dnum)}, ${M[e.start].hm} to ${esc(endTxt)}</h3>
+      <div class="stats"><span><b>${Math.round(e.peak * 100)}%</b>peak chance</span><span><b>${mm(e.total)} mm</b>where it rains</span><span><b>${n} of ${e.withData}</b>models</span></div>
+      <p class="onset">${esc(range)}<span class="detail">${esc(detail)}</span></p>
+    </article>`;
   }).join('');
 }
 
 function renderSources() {
-  const rows = state.sources.map((s, idx) => {
+  const items = state.sources.map((s, idx) => {
     const st = s.status === 'ok'
-      ? `<span class="ok">Answered</span><span class="detail">${s.hours} h${s.usedId ? `, ${esc(s.usedId)}` : ''}${s.rainNote ? `. ${esc(s.rainNote)}` : ''}</span>`
-      : s.status === 'off' ? `<span class="off">Not set up</span><span class="detail">${esc(s.msg)}</span>`
-      : `<span class="err">Failed</span><span class="detail">${esc(s.msg)}</span>`;
+      ? `<span class="ok">Answered</span>, ${s.hours} h${s.rainNote ? `. ${esc(s.rainNote)}` : ''}`
+      : s.status === 'off' ? `<span class="off">Not set up</span>. ${esc(s.msg)}`
+      : `<span class="err">Failed</span>. ${esc(s.msg)}`;
     const w = s.status === 'ok'
-      ? `<input type="number" min="0" max="3" step="0.25" value="${s.weight}" data-w="${idx}" aria-label="Weight for ${esc(s.def.label)}">`
-      : `<span class="muted">${s.weight}</span>`;
-    return `<tr><td><b>${esc(s.def.label)}</b><span class="detail">${esc(s.def.org)}</span></td><td>${esc(s.def.kind)}</td><td>${st}</td><td>${w}</td></tr>`;
+      ? `<input type="number" inputmode="decimal" min="0" max="3" step="0.25" value="${s.weight}" data-w="${idx}" aria-label="Weight for ${esc(s.def.label)}">`
+      : '';
+    return `<div class="src"><div class="name"><b>${esc(s.def.label)}</b><span>${esc(s.def.kind)}, ${esc(s.def.org)}</span></div><div class="w">${w}</div><div class="status">${st}</div></div>`;
   });
   state.ensembles.forEach(e => {
-    const st = e.status === 'ok'
-      ? `<span class="ok">Answered</span><span class="detail">${e.members.length} runs, ${esc(e.usedId)}</span>`
-      : `<span class="err">Failed</span><span class="detail">${esc(e.msg)}</span>`;
-    rows.push(`<tr><td><b>${esc(e.def.label)}</b><span class="detail">Rain chance only</span></td><td>Ensemble</td><td>${st}</td><td><span class="muted">One rain vote</span></td></tr>`);
+    const st = e.status === 'ok' ? `<span class="ok">Answered</span>, ${e.members.length} runs` : `<span class="err">Failed</span>. ${esc(e.msg)}`;
+    items.push(`<div class="src"><div class="name"><b>${esc(e.def.label)}</b><span>Ensemble, rain chance only</span></div><div class="w">One rain vote</div><div class="status">${st}</div></div>`);
   });
-  $('#sources').innerHTML = rows.join('');
+  $('#sources').innerHTML = items.join('');
+  $('#srcnote').textContent = `Set a weight to 0 to leave a source out. Weights are saved on this device. Forecast point ${LOC.lat.toFixed(3)}, ${LOC.lon.toFixed(3)}.`;
 }
 
 function makeArrowCanvas(color) {
   const c = document.createElement('canvas'); c.width = 16; c.height = 16;
-  const x = c.getContext('2d'); x.fillStyle = color;
+  const x = c.getContext('2d'); if (!x) return 'triangle';
+  x.fillStyle = color;
   x.beginPath(); x.moveTo(8, 1); x.lineTo(13, 14); x.lineTo(8, 10.5); x.lineTo(3, 14); x.closePath(); x.fill();
   return c;
 }
 
 function renderCharts() {
   if (typeof Chart === 'undefined') {
-    document.querySelectorAll('.chart').forEach(c => { c.innerHTML = '<p class="note">Charts need the Chart.js library, which did not load. Check your internet connection and refresh.</p>'; });
+    document.querySelectorAll('.chart').forEach(c => { c.innerHTML = '<p class="chart-msg">Charts need the Chart.js library, which did not load. Check your connection and refresh.</p>'; });
     return;
   }
   Object.values(state.charts).forEach(c => c.destroy()); state.charts = {};
@@ -754,23 +804,63 @@ function renderCharts() {
   const S = a => a.slice(0, span);
   const C = { ink: cssVar('--ink'), muted: cssVar('--muted'), rule: cssVar('--rule'), rain: cssVar('--rain'), temp: cssVar('--temp'), wind: cssVar('--wind') };
   const labels = M.map(m => `${m.dnum} ${m.hm}`);
-  const tick = (v, i) => {
-    const m = M[i]; if (!m) return null;
-    if (span <= 48) return m.hour === 0 ? m.day : (m.hour % 6 === 0 ? m.hm : null);
-    return m.hour === 0 ? m.dnum : (m.hour === 12 ? '12:00' : null);
-  };
+  const narrow = isNarrow();
   const base = (yTitle) => ({
     responsive: true, maintainAspectRatio: false, animation: false,
     interaction: { mode: 'index', intersect: false },
+    layout: { padding: { right: 2 } },
     plugins: {
-      legend: { labels: { color: C.muted, boxWidth: 14, filter: it => !it.text.startsWith('_') } },
+      legend: { position: 'bottom', labels: { color: C.muted, boxWidth: 10, boxHeight: 10, font: { size: 11 }, filter: it => !it.text.startsWith('_') } },
       tooltip: { callbacks: { title: it => labels[it[0].dataIndex] }, filter: it => !it.dataset.label.startsWith('_') },
     },
     scales: {
-      x: { ticks: { autoSkip: false, maxRotation: 0, color: C.muted, font: { size: 11 }, callback: tick },
-           grid: { color: ctx => (ctx.index > 0 && M[ctx.index] && M[ctx.index].hour === 0 ? C.rule : 'transparent') } },
-      y: { title: { display: true, text: yTitle, color: C.muted }, ticks: { color: C.muted }, grid: { color: rgba(C.rule, 0.6) } },
+      x: {
+        ticks: {
+          autoSkip: false, maxRotation: 0, color: C.muted, font: { size: 11 },
+          callback: function (v, i) {
+            const m = M[i]; if (!m) return null;
+            const pxH = (this.chart.chartArea ? this.chart.chartArea.width : this.chart.width) / span;
+            if (m.hour === 0) return pxH * 24 >= 70 ? m.dnum : m.day;
+            const step = [3, 6, 12].find(s => s * pxH >= 44);
+            return step && m.hour % step === 0 ? m.hm : null;
+          },
+        },
+        grid: { color: ctx => (ctx.index > 0 && M[ctx.index] && M[ctx.index].hour === 0 ? C.rule : 'transparent') },
+      },
+      y: { title: { display: !narrow, text: yTitle, color: C.muted }, ticks: { color: C.muted, font: { size: 11 } }, grid: { color: rgba(C.rule, 0.6) } },
     },
+  });
+
+  // Rain
+  const rOpts = base('Chance of rain (%)');
+  rOpts.scales.y.min = 0; rOpts.scales.y.max = 100;
+  rOpts.scales.y.ticks.callback = v => `${v}%`;
+  rOpts.scales.y1 = { position: 'right', min: 0, suggestedMax: 3, title: { display: !narrow, text: 'mm per hour where it rains', color: C.muted }, ticks: { color: C.muted, font: { size: 11 } }, grid: { display: false } };
+  state.charts.r = new Chart($('#cRain'), {
+    data: { labels, datasets: [
+      { type: 'bar', label: 'Chance of rain', data: S(B.p).map(p => (p == null ? null : Math.round(p * 100))), backgroundColor: rgba(C.rain, 0.75), borderWidth: 0, barPercentage: 1, categoryPercentage: 0.92, yAxisID: 'y' },
+      { type: 'line', label: 'mm/h where it rains', data: S(B.amt).map(v => (v ? +v.toFixed(2) : 0)), borderColor: C.ink, borderWidth: 1.5, pointRadius: 0, stepped: 'middle', yAxisID: 'y1' },
+    ] },
+    options: rOpts,
+  });
+
+  // Wind
+  const arrow = makeArrowCanvas(C.wind);
+  const chartW = ($('#cWind').parentElement.clientWidth || 360);
+  const pxH = chartW / span;
+  const every = pxH >= 10 ? 3 : pxH >= 4 ? 6 : 12;
+  const wOpts = base('km/h'); wOpts.scales.y.min = 0;
+  state.charts.w = new Chart($('#cWind'), {
+    type: 'line',
+    data: { labels, datasets: [
+      { label: '_wlow', data: S(B.wMin), borderWidth: 0, pointRadius: 0, fill: false },
+      { label: 'Model spread', data: S(B.wMax), borderWidth: 0, pointRadius: 0, fill: '-1', backgroundColor: rgba(C.wind, 0.16) },
+      { label: 'Consensus', data: S(B.wspd), borderColor: C.wind, backgroundColor: C.wind, borderWidth: 2.5, pointRadius: 0, tension: 0.3 },
+      { label: 'Gusts', data: S(B.gust), borderColor: C.wind, backgroundColor: C.wind, borderDash: [5, 4], borderWidth: 1.5, pointRadius: 0, tension: 0.3 },
+      { label: '_dir', data: S(B.wspd).map((v, i) => (i % every === 0 ? v : null)), showLine: false, pointStyle: arrow, pointRadius: 8, pointHoverRadius: 8,
+        pointRotation: S(B.wdir).map(d => (d == null ? 0 : d + 180)) },
+    ] },
+    options: wOpts,
   });
 
   // Temperature
@@ -781,44 +871,16 @@ function renderCharts() {
   ];
   if (state.showModels) activeSources().forEach(s => tSets.push({ label: s.def.label, data: S(s.a.temp), borderColor: rgba(C.muted, 0.55), borderWidth: 1, pointRadius: 0, tension: 0.3 }));
   const tOpts = base('°C');
+  tOpts.scales.y.ticks.callback = v => `${v}°`;
   if (state.showModels) tOpts.plugins.legend.labels.filter = it => ['Model spread', 'Consensus'].includes(it.text);
   state.charts.t = new Chart($('#cTemp'), { type: 'line', data: { labels, datasets: tSets }, options: tOpts });
-
-  // Rain
-  const rOpts = base('Chance of rain (%)');
-  rOpts.scales.y.min = 0; rOpts.scales.y.max = 100;
-  rOpts.scales.y1 = { position: 'right', min: 0, suggestedMax: 3, title: { display: true, text: 'mm per hour where it rains', color: C.muted }, ticks: { color: C.muted }, grid: { display: false } };
-  state.charts.r = new Chart($('#cRain'), {
-    data: { labels, datasets: [
-      { type: 'bar', label: 'Chance of rain', data: S(B.p).map(p => (p == null ? null : Math.round(p * 100))), backgroundColor: rgba(C.rain, 0.75), borderWidth: 0, barPercentage: 1, categoryPercentage: 0.92, yAxisID: 'y' },
-      { type: 'line', label: 'Intensity where it rains', data: S(B.amt).map(v => (v ? +v.toFixed(2) : 0)), borderColor: C.ink, borderWidth: 1.5, pointRadius: 0, stepped: 'middle', yAxisID: 'y1' },
-    ] },
-    options: rOpts,
-  });
-
-  // Wind
-  const arrow = makeArrowCanvas(C.wind);
-  const every = span <= 48 ? 3 : 6;
-  const wOpts = base('km/h'); wOpts.scales.y.min = 0;
-  state.charts.w = new Chart($('#cWind'), {
-    type: 'line',
-    data: { labels, datasets: [
-      { label: '_wlow', data: S(B.wMin), borderWidth: 0, pointRadius: 0, fill: false },
-      { label: 'Model spread', data: S(B.wMax), borderWidth: 0, pointRadius: 0, fill: '-1', backgroundColor: rgba(C.wind, 0.16) },
-      { label: 'Consensus speed', data: S(B.wspd), borderColor: C.wind, backgroundColor: C.wind, borderWidth: 2.5, pointRadius: 0, tension: 0.3 },
-      { label: 'Gusts', data: S(B.gust), borderColor: C.wind, backgroundColor: C.wind, borderDash: [5, 4], borderWidth: 1.5, pointRadius: 0, tension: 0.3 },
-      { label: '_dir', data: S(B.wspd).map((v, i) => (i % every === 0 ? v : null)), showLine: false, pointStyle: arrow, pointRadius: 8, pointHoverRadius: 8,
-        pointRotation: S(B.wdir).map(d => (d == null ? 0 : d + 180)) },
-    ] },
-    options: wOpts,
-  });
 }
 
 function renderStatus() {
   const okN = state.sources.filter(s => s.status === 'ok').length + state.ensembles.filter(e => e.status === 'ok').length;
   const totN = state.sources.filter(s => s.status !== 'off').length + state.ensembles.length;
   const when = state.fetchedAt ? fHM.format(state.fetchedAt) : '–';
-  $('#status').textContent = `${LOC.lat.toFixed(3)}, ${LOC.lon.toFixed(3)}. Updated ${when} SAST. ${okN} of ${totN} sources answered.`;
+  $('#status').textContent = `Updated ${when} SAST. ${okN} of ${totN} sources answered.`;
 }
 
 function renderAll() {
@@ -829,7 +891,7 @@ function renderAll() {
   const anyOK = state.sources.some(s => s.status === 'ok') || state.ensembles.some(e => e.status === 'ok');
   if (!anyOK) {
     $('#headline').textContent = 'No forecasts loaded';
-    $('#support').textContent = 'None of the forecast services answered. Check your internet connection and refresh. If you are viewing this inside claude.ai, download the file and open it in your browser, because the claude.ai viewer blocks outside data.';
+    $('#support').textContent = 'None of the forecast services answered. Check your internet connection and refresh. If you are viewing this inside claude.ai, open the hosted copy in your browser instead, because the claude.ai viewer blocks outside data.';
     ['#facts', '#ribbon', '#days', '#events'].forEach(s => { $(s).innerHTML = ''; });
     return;
   }
@@ -844,16 +906,17 @@ function renderAll() {
 /* ───────────── Wiring ───────────── */
 (function init() {
   const p = loadJSON(PKEY);
-  if (p.span === 48 || p.span === 168) state.span = p.span;
+  if (SPANS.includes(p.span)) state.span = p.span;
+  else if (isNarrow()) state.span = 24;
   if (p.thr) state.thr = +p.thr;
   state.showModels = !!p.showModels;
   $('#thr').value = String(state.thr);
   $('#showModels').checked = state.showModels;
-  document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.span === state.span)));
-
-  document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+  const segBtns = document.querySelectorAll('.seg button');
+  segBtns.forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.span === state.span)));
+  segBtns.forEach(b => b.addEventListener('click', () => {
     state.span = +b.dataset.span; savePrefs();
-    document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    segBtns.forEach(x => x.setAttribute('aria-pressed', String(x === b)));
     if (state.B) { renderRibbon(); renderCharts(); }
   }));
   $('#thr').addEventListener('change', e => { state.thr = +e.target.value; savePrefs(); if (state.sources.length) renderAll(); });
@@ -861,14 +924,25 @@ function renderAll() {
   $('#refresh').addEventListener('click', loadAll);
   $('#sources').addEventListener('change', e => {
     const i = e.target.dataset && e.target.dataset.w; if (i == null) return;
-    const v = clamp(parseFloat(e.target.value) || 0, 0, 3);
-    state.sources[+i].weight = v; saveWeights(); renderAll();
+    state.sources[+i].weight = clamp(parseFloat(e.target.value) || 0, 0, 3); saveWeights(); renderAll();
   });
-  $('#resetWeights').addEventListener('click', () => {
-    state.sources.forEach(s => { s.weight = s.def.weight; }); saveWeights(); renderAll();
+  $('#resetWeights').addEventListener('click', () => { state.sources.forEach(s => { s.weight = s.def.weight; }); saveWeights(); renderAll(); });
+
+  // Re-fit the ribbon and wind arrows when the screen size or orientation changes.
+  let rt = null, lastW = document.documentElement.clientWidth;
+  window.addEventListener('resize', () => {
+    clearTimeout(rt);
+    rt = setTimeout(() => {
+      const w = document.documentElement.clientWidth;
+      if (state.B && Math.abs(w - lastW) > 40) { lastW = w; renderRibbon(); renderCharts(); }
+    }, 200);
   });
   const mq = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
   if (mq && mq.addEventListener) mq.addEventListener('change', () => { if (state.B) renderCharts(); });
+  // Refresh when the app comes back to the foreground after 30+ minutes.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && state.fetchedAt && Date.now() - state.fetchedAt > 30 * 60e3) loadAll();
+  });
 
   loadAll();
 })();
