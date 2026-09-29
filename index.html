@@ -57,7 +57,33 @@ button, select, input { font: inherit; color: var(--ink); }
   background: var(--paper); border-bottom: 1px solid var(--rule);
   box-shadow: 0 calc(-1 * env(safe-area-inset-top, 0px)) 0 var(--paper);
 }
-.top h1 { flex: 1; min-width: 0; margin: 0; font-size: 1.2rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.top { flex-wrap: wrap; }
+.top h1 { flex: 1; min-width: 0; margin: 0; font-size: 1.2rem; font-weight: 600; }
+.placebtn { display: flex; align-items: center; gap: .3rem; max-width: 100%; min-height: 40px; padding: 0 .25rem 0 0; border: 0; background: transparent;
+  cursor: pointer; font: inherit; color: inherit; text-align: left; }
+.placebtn span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.placebtn svg { width: 18px; height: 18px; flex: none; color: var(--muted); transition: transform .15s; }
+.placebtn[aria-expanded="true"] svg { transform: rotate(180deg); }
+.locpanel { flex-basis: 100%; padding: .6rem 0 .3rem; }
+.locpanel[hidden] { display: none; }
+.locrow { display: flex; gap: .5rem; }
+.locrow input { flex: 1; min-width: 0; min-height: 44px; padding: 0 .75rem; font-size: 1rem; background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; }
+.locmsg { font-size: .85rem; color: var(--muted); margin-top: .5rem; }
+.locmsg:empty { display: none; }
+.locmsg.err { color: var(--warn); font-weight: 700; }
+.locresults { list-style: none; margin: .4rem 0 0; padding: 0; max-height: 45vh; overflow: auto; }
+.locresults:empty { display: none; }
+.locresults button { display: block; width: 100%; text-align: left; min-height: 48px; padding: .5rem .25rem; background: transparent; border: 0;
+  border-top: 1px solid var(--rule); cursor: pointer; }
+.locresults button:hover { background: var(--panel); }
+.locresults button span { display: block; font-size: .8rem; color: var(--muted); }
+.recent { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .7rem; align-items: center; }
+.recent:empty { display: none; }
+.recent .lab { font-size: .78rem; color: var(--muted); margin-right: .2rem; }
+.chip { min-height: 36px; padding: 0 .75rem; border: 1px solid var(--rule); border-radius: 999px; background: var(--panel); cursor: pointer; font-size: .85rem; }
+.chip:hover { border-color: var(--ink); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+main.loading section.block { opacity: .4; transition: opacity .2s; }
 .seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; flex: none; }
 .seg button { border: 0; background: transparent; color: var(--muted); min-height: 40px; padding: 0 .65rem; cursor: pointer; font-weight: 700; font-size: .85rem; white-space: nowrap; }
 .seg button + button { border-left: 1px solid var(--rule); }
@@ -143,6 +169,7 @@ input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--ink); }
 .err { color: var(--warn); font-weight: 700; }
 .off { color: var(--muted); font-weight: 700; }
 .btn { border: 1px solid var(--ink); background: transparent; color: var(--ink); min-height: 44px; padding: 0 1rem; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: .88rem; margin-top: .9rem; }
+.btn.primary { background: var(--ink); color: var(--paper); margin-top: 0; flex: none; }
 details { margin-top: 1.2rem; max-width: 80ch; }
 summary { cursor: pointer; font-weight: 700; min-height: 44px; display: flex; align-items: center; }
 details p { margin-top: .6rem; font-size: .9rem; color: var(--muted); }
@@ -183,7 +210,7 @@ footer a { color: inherit; }
 </head>
 <body>
 <header class="top">
-  <h1 id="place">Stellenbosch</h1>
+  <h1><button class="placebtn" id="placeBtn" type="button" aria-expanded="false" aria-controls="locPanel" title="Change location"><span id="place">Stellenbosch</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></h1>
   <div class="seg" role="group" aria-label="Time span">
     <button type="button" data-span="24" aria-pressed="false">24 h</button>
     <button type="button" data-span="48" aria-pressed="true">48 h</button>
@@ -192,6 +219,16 @@ footer a { color: inherit; }
   <button class="iconbtn" id="refresh" type="button" aria-label="Refresh forecasts" title="Refresh forecasts">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
   </button>
+  <form class="locpanel" id="locPanel" role="search" hidden>
+    <label for="locInput" class="sr">Town or place name</label>
+    <div class="locrow">
+      <input id="locInput" type="search" placeholder="Town or place, e.g. Hermanus" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="search">
+      <button class="btn primary" type="submit">Search</button>
+    </div>
+    <p class="locmsg" id="locMsg" role="status" aria-live="polite"></p>
+    <ul class="locresults" id="locResults"></ul>
+    <div class="recent" id="recent"></div>
+  </form>
 </header>
 
 <main>
@@ -263,7 +300,7 @@ footer a { color: inherit; }
   </section>
 
   <footer>
-    Forecast data from <a href="https://open-meteo.com/">Open-Meteo</a> (CC BY 4.0), which serves the ECMWF, NOAA, DWD, Met Office, Météo-France and Environment Canada models, and from <a href="https://api.met.no/">MET Norway</a> (CC BY 4.0). A planning aid, not an official warning service; for severe weather, follow the South African Weather Service.
+    Forecast data from <a href="https://open-meteo.com/">Open-Meteo</a> (CC BY 4.0), which serves the ECMWF, NOAA, DWD, Met Office, Météo-France and Environment Canada models, and from <a href="https://api.met.no/">MET Norway</a> (CC BY 4.0). Place search by Open-Meteo using <a href="https://www.geonames.org/">GeoNames</a> data. A planning aid, not an official warning service; for severe weather, follow the South African Weather Service.
   </footer>
 </main>
 
@@ -272,12 +309,24 @@ footer a { color: inherit; }
 
 /* ───────────── Configuration ───────────── */
 const qs = new URLSearchParams(location.search);
-const LOC = {
-  name: qs.get('name') || 'Stellenbosch',
-  lat: parseFloat(qs.get('lat')) || -33.9321,
-  lon: parseFloat(qs.get('lon')) || 18.8602,
-};
-const TZ = 'Africa/Johannesburg';
+const HOME = { name: 'Stellenbosch', lat: -33.9321, lon: 18.8602, tz: 'Africa/Johannesburg', sub: 'Western Cape, South Africa' };
+const LKEY = 'wx-consensus-location-v1';
+const RKEY = 'wx-consensus-recent-v1';
+function validTZ(tz) { if (!tz) return false; try { new Intl.DateTimeFormat('en-GB', { timeZone: tz }); return true; } catch (e) { return false; } }
+function pickStartLocation() {
+  const lat = parseFloat(qs.get('lat')), lon = parseFloat(qs.get('lon'));
+  if (Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+    const tz = qs.get('tz');
+    return { name: qs.get('name') || `${lat.toFixed(2)}, ${lon.toFixed(2)}`, lat, lon, tz: validTZ(tz) ? tz : HOME.tz, sub: qs.get('sub') || '' };
+  }
+  const saved = loadJSON(LKEY);
+  if (Number.isFinite(saved.lat) && Number.isFinite(saved.lon) && saved.name) return { ...saved, tz: validTZ(saved.tz) ? saved.tz : HOME.tz };
+  return { ...HOME };
+}
+let LOC = pickStartLocation();
+let TZ = LOC.tz;
+const near = (a, b) => Math.abs(a.lat - b.lat) < 0.02 && Math.abs(a.lon - b.lon) < 0.02;
+const isHome = () => near(LOC, HOME);
 const HOURS = 168;
 const H = 3600e3;
 const LIKELY = 0.5;      // a "rain spell" is any run of hours at or above this chance
@@ -323,12 +372,19 @@ function rgba(hex, a) {
   const n = parseInt(f, 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
-const fDay = new Intl.DateTimeFormat('en-ZA', { timeZone: TZ, weekday: 'short' });
-const fDayLong = new Intl.DateTimeFormat('en-ZA', { timeZone: TZ, weekday: 'long' });
-const fDate = new Intl.DateTimeFormat('en-ZA', { timeZone: TZ, day: 'numeric' });
-const fHM = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
-const fHour = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', hourCycle: 'h23' });
-const fKey = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
+// Formatters follow the selected place's time zone.
+let fDay, fDayLong, fDate, fHM, fHour, fKey;
+function setTZ(tz) {
+  TZ = validTZ(tz) ? tz : HOME.tz;
+  fDay = new Intl.DateTimeFormat('en-ZA', { timeZone: TZ, weekday: 'short' });
+  fDayLong = new Intl.DateTimeFormat('en-ZA', { timeZone: TZ, weekday: 'long' });
+  fDate = new Intl.DateTimeFormat('en-ZA', { timeZone: TZ, day: 'numeric' });
+  fHM = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  fHour = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', hourCycle: 'h23' });
+  fKey = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
+}
+setTZ(TZ);
+const tzLabel = () => (TZ === 'Africa/Johannesburg' ? 'SAST' : `${TZ.split('/').pop().replace(/_/g, ' ')} time`);
 
 function wmean(pairs) { let s = 0, w = 0; for (const [v, wt] of pairs) { s += v * wt; w += wt; } return w > 0 ? s / w : null; }
 function robust(pairs) {
@@ -458,6 +514,7 @@ async function fetchMet() {
 async function fetchAccu() {
   if (!ACCUWEATHER.apiKey || !ACCUWEATHER.locationKey)
     throw new OffError('Needs an API key and location key at the top of the file');
+  if (!isHome()) throw new OffError(`Set up for ${HOME.name} only`);
   const url = `${ACCUWEATHER.baseUrl}/forecasts/v1/hourly/12hour/${encodeURIComponent(ACCUWEATHER.locationKey)}` +
     `?apikey=${encodeURIComponent(ACCUWEATHER.apiKey)}&details=true&metric=true`;
   const arr = await getJSON(url);
@@ -505,9 +562,11 @@ function prepareSource(s, r) {
   if (!s.hours) { s.status = 'error'; s.msg = 'No forecast hours in the next 7 days'; }
 }
 
+let loadToken = 0;
 async function loadAll() {
+  const my = ++loadToken;
   const btn = $('#refresh'); btn.disabled = true;
-  $('#status').textContent = 'Fetching forecasts…';
+  $('#status').textContent = `Fetching forecasts for ${LOC.name}…`;
   buildGrid();
   const saved = loadJSON(WKEY);
   const srcP = SOURCE_DEFS.map(async def => {
@@ -524,8 +583,11 @@ async function loadAll() {
     catch (err) { e.status = 'error'; e.msg = friendly(err); }
     return e;
   });
-  state.sources = await Promise.all(srcP);
-  state.ensembles = await Promise.all(ensP);
+  const sources = await Promise.all(srcP);
+  const ensembles = await Promise.all(ensP);
+  if (my !== loadToken) return;               // a newer place was chosen while this was loading
+  state.sources = sources;
+  state.ensembles = ensembles;
   state.fetchedAt = Date.now();
   btn.disabled = false;
   renderAll();
@@ -714,6 +776,7 @@ const arrowSVG = d => `<svg class="arrow" viewBox="0 0 16 16" aria-hidden="true"
 
 function renderDays() {
   const B = state.B, M = state.meta; const groups = []; let g = null;
+  const capeCoast = LOC.lat < -31 && LOC.lat > -35.5 && LOC.lon > 17 && LOC.lon < 27;
   M.forEach((m, i) => { if (!g || g.key !== m.key) { g = { key: m.key, m, idx: [] }; groups.push(g); } g.idx.push(i); });
   const days = groups.filter(x => x.idx.length >= 3).slice(0, 7);
   const out = days.map((d, di) => {
@@ -732,7 +795,7 @@ function renderDays() {
     else rain = `<div class="row dry">Dry${mp >= 0 ? `, ${Math.round(mp * 100)}% at most` : ''}</div>`;
     let wm = -1, wi = -1; I.forEach(i => { if (B.wspd[i] != null && B.wspd[i] > wm) { wm = B.wspd[i]; wi = i; } });
     const gmax = Math.max(...I.map(i => B.gust[i] ?? -1));
-    const se = I.some(i => B.wdir[i] != null && B.wspd[i] != null && B.wdir[i] >= 100 && B.wdir[i] <= 170 && B.wspd[i] >= 30);
+    const se = capeCoast && I.some(i => B.wdir[i] != null && B.wspd[i] != null && B.wdir[i] >= 100 && B.wdir[i] <= 170 && B.wspd[i] >= 30);
     const wind = wi >= 0 ? `<div class="row">${B.wdir[wi] != null ? arrowSVG(B.wdir[wi]) : ''}<span>${r0(wm)} km/h ${B.wdir[wi] != null ? compass(B.wdir[wi]) : ''}${gmax >= 0 ? `, gusts ${r0(gmax)}` : ''}</span>${se ? '<span class="tag">South-easter</span>' : ''}</div>` : '';
     const sds = I.map(i => B.tSd[i]).filter(v => v != null);
     const tScore = sds.length ? 1 - clamp((sds.reduce((a, b) => a + b, 0) / sds.length) / 3, 0, 1) : 0.5;
@@ -880,10 +943,11 @@ function renderStatus() {
   const okN = state.sources.filter(s => s.status === 'ok').length + state.ensembles.filter(e => e.status === 'ok').length;
   const totN = state.sources.filter(s => s.status !== 'off').length + state.ensembles.length;
   const when = state.fetchedAt ? fHM.format(state.fetchedAt) : '–';
-  $('#status').textContent = `Updated ${when} SAST. ${okN} of ${totN} sources answered.`;
+  $('#status').textContent = `${LOC.sub ? `${LOC.sub}. ` : ''}Updated ${when} ${tzLabel()}. ${okN} of ${totN} sources answered.`;
 }
 
 function renderAll() {
+  document.querySelector('main').classList.remove('loading');
   $('#place').textContent = LOC.name;
   document.title = `${LOC.name} forecast consensus`;
   renderStatus();
@@ -901,6 +965,79 @@ function renderAll() {
   renderDays();
   renderEvents();
   renderCharts();
+}
+
+/* ───────────── Location search ───────────── */
+function loadRecent() { try { const a = JSON.parse(localStorage.getItem(RKEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+function addRecent(loc) { saveJSON(RKEY, [loc, ...loadRecent().filter(x => !near(x, loc) && !near(x, HOME))].slice(0, 5)); }
+function placeLabel(r) {
+  return [r.admin1, r.country].filter((x, i, a) => x && x !== r.name && a.indexOf(x) === i).join(', ');
+}
+async function searchPlaces(q) {
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=10&language=en&format=json`;
+  const j = await getJSON(url, 10000);
+  const res = (j.results || []).filter(r => Number.isFinite(r.latitude) && Number.isFinite(r.longitude));
+  // South African matches first, so "Wellington" or "Worcester" find the Cape towns before the overseas ones.
+  return res.map((r, i) => ({ r, i })).sort((a, b) => ((b.r.country_code === 'ZA') - (a.r.country_code === 'ZA')) || a.i - b.i).map(x => x.r).slice(0, 6);
+}
+function setMsg(t, kind = '') { const m = $('#locMsg'); m.textContent = t; m.className = `locmsg${kind ? ` ${kind}` : ''}`; }
+let lastResults = [], shownRecent = [];
+function renderRecent() {
+  shownRecent = [HOME, ...loadRecent().filter(x => !near(x, HOME))].filter(x => !near(x, LOC));
+  $('#recent').innerHTML = shownRecent.length
+    ? `<span class="lab">Recent</span>${shownRecent.map((x, i) => `<button type="button" class="chip" data-k="${i}">${esc(x.name)}${near(x, HOME) ? ' (home)' : ''}</button>`).join('')}`
+    : '';
+}
+function openPanel(open) {
+  $('#locPanel').hidden = !open;
+  $('#placeBtn').setAttribute('aria-expanded', String(open));
+  if (open) { setMsg(''); $('#locResults').innerHTML = ''; renderRecent(); setTimeout(() => $('#locInput').focus(), 0); }
+}
+async function doSearch(raw) {
+  const q = raw.trim().replace(/\s+/g, ' ');
+  $('#locResults').innerHTML = '';
+  if (q.length < 2) { setMsg('Type at least two letters of a town or place name.', 'err'); return; }
+  setMsg(`Searching for “${q}”…`);
+  try {
+    const res = await searchPlaces(q);
+    if (!res.length) {
+      setMsg(`Couldn’t find “${q}”. Check the spelling, or try the nearest larger town.`, 'err');
+      return;
+    }
+    if (res.length === 1) { selectPlace(res[0]); return; }
+    lastResults = res;
+    setMsg(`${res.length} places match “${q}”. Pick one:`);
+    $('#locResults').innerHTML = res.map((r, i) =>
+      `<li><button type="button" data-r="${i}"><b>${esc(r.name)}</b><span>${esc(placeLabel(r) || `${r.latitude.toFixed(2)}, ${r.longitude.toFixed(2)}`)}</span></button></li>`).join('');
+  } catch (e) {
+    setMsg(`Couldn’t reach the place search (${friendly(e)}). Check your connection and try again.`, 'err');
+  }
+}
+function updateURL() {
+  try {
+    if (isHome()) { history.replaceState(null, '', location.pathname); return; }
+    const u = new URLSearchParams({ name: LOC.name, lat: LOC.lat, lon: LOC.lon, tz: LOC.tz });
+    if (LOC.sub) u.set('sub', LOC.sub);
+    history.replaceState(null, '', `${location.pathname}?${u}`);
+  } catch (e) { /* some file:// contexts block this */ }
+}
+function selectPlace(r) {
+  const lat = +(+(r.latitude ?? r.lat)).toFixed(4), lon = +(+(r.longitude ?? r.lon)).toFixed(4);
+  const tz = r.timezone ?? r.tz;
+  const loc = { name: r.name, lat, lon, tz: validTZ(tz) ? tz : HOME.tz, sub: r.sub ?? placeLabel(r) };
+  LOC = loc; setTZ(loc.tz);
+  saveJSON(LKEY, loc);
+  if (!near(loc, HOME)) addRecent(loc);
+  updateURL();
+  $('#locInput').value = '';
+  openPanel(false);
+  $('#place').textContent = loc.name;
+  $('#headline').textContent = `Fetching forecasts for ${loc.name}…`;
+  $('#support').textContent = '';
+  $('#facts').innerHTML = '';
+  document.querySelector('main').classList.add('loading');
+  window.scrollTo({ top: 0 });
+  loadAll();
 }
 
 /* ───────────── Wiring ───────────── */
@@ -922,6 +1059,12 @@ function renderAll() {
   $('#thr').addEventListener('change', e => { state.thr = +e.target.value; savePrefs(); if (state.sources.length) renderAll(); });
   $('#showModels').addEventListener('change', e => { state.showModels = e.target.checked; savePrefs(); if (state.B) renderCharts(); });
   $('#refresh').addEventListener('click', loadAll);
+  $('#placeBtn').addEventListener('click', () => openPanel($('#locPanel').hidden));
+  $('#locPanel').addEventListener('submit', e => { e.preventDefault(); doSearch($('#locInput').value); });
+  $('#locPanel').addEventListener('keydown', e => { if (e.key === 'Escape') { openPanel(false); $('#placeBtn').focus(); } });
+  $('#locResults').addEventListener('click', e => { const b = e.target.closest('button[data-r]'); if (b) selectPlace(lastResults[+b.dataset.r]); });
+  $('#recent').addEventListener('click', e => { const b = e.target.closest('button[data-k]'); if (b) selectPlace(shownRecent[+b.dataset.k]); });
+  $('#place').textContent = LOC.name;
   $('#sources').addEventListener('change', e => {
     const i = e.target.dataset && e.target.dataset.w; if (i == null) return;
     state.sources[+i].weight = clamp(parseFloat(e.target.value) || 0, 0, 3); saveWeights(); renderAll();
